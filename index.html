@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Free Fire Updates By Trishan~</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <div class="logo-star">★</div>
+      <div>
+        <div class="site-title">Free Fire Updates</div>
+        <div class="site-sub">By Trishan~</div>
+      </div>
+    </div>
+    <a class="admin-btn" href="admin.html">Admin Panel</a>
+  </header>
+
+  <main class="container">
+    <h2 class="section-title">Featured News</h2>
+    <div id="posts" class="posts-grid"></div>
+  </main>
+
+  <footer class="site-footer">
+    © <span id="year"></span> Free Fire Updates By Trishan~
+  </footer>
+
+  <script>
+    // Load posts from localStorage or use samples
+    const POSTS_KEY = 'ffu_posts_v1';
+    const nowYear = new Date().getFullYear();
+    document.getElementById('year').textContent = nowYear;
+
+    const sample = [
+      {
+        id: 's1',
+        title: 'LUMINOUS CARNIVAL - Festival of Lights Returns',
+        category: 'Events',
+        excerpt: 'The spectacular LUMINOUS CARNIVAL event is back! Experience the Festival of Lights with exclusive character skins, legendary weapons, and limited-time rewards.',
+        date: 'Oct 15, 2025',
+        image: 'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=800&q=60'
+      },
+      {
+        id: 's2',
+        title: 'Digimon Collaboration!!',
+        category: 'Game Updates',
+        excerpt: 'The Digimon is an anime type cartoon. Collabs with Garena and items coming soon in Game Date not fixed …',
+        date: 'Oct 15, 2025',
+        image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=60'
+      },
+      {
+        id: 's3',
+        title: 'Patch Notes V1.98.5 Balancing Update',
+        category: 'Patch Notes',
+        excerpt: 'Important balancing changes and bug fixes included in the V1.98.5 patch. Read full patch notes to prepare your loadout.',
+        date: 'Oct 15, 2025',
+        image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=60'
+      }
+    ];
+
+    function getPosts() {
+      try {
+        const raw = localStorage.getItem(POSTS_KEY);
+        if (!raw) return sample;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return sample;
+        return parsed;
+      } catch (e) {
+        return sample;
+      }
+    }
+
+    function createCard(post){
+      const div = document.createElement('article');
+      div.className = 'card';
+      div.innerHTML = `
+        <div class="card-media" style="background-image:url('${post.image || ''}')"></div>
+        <div class="card-body">
+          <span class="tag">${escapeHtml(post.category || 'News')}</span>
+          <h3 class="card-title">${escapeHtml(post.title)}</h3>
+          <p class="card-excerpt">${escapeHtml(post.excerpt)}</p>
+          <div class="card-meta">${escapeHtml(post.date || '')}</div>
+        </div>
+      `;
+      return div;
+    }
+
+    function renderPosts(){
+      const postsWrap = document.getElementById('posts');
+      postsWrap.innerHTML = '';
+      const posts = getPosts();
+      posts.forEach(p => postsWrap.appendChild(createCard(p)));
+    }
+
+    // small helper
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+
+    renderPosts();
+  </script>
+</body>
+</html>

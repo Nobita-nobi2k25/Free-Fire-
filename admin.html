@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Free Fire Updates By Trishan~</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <div class="logo-star">★</div>
+      <div>
+        <div class="site-title">Free Fire Updates</div>
+        <div class="site-sub">By Trishan~</div>
+      </div>
+    </div>
+    <a class="admin-btn" href="index.html">View Site</a>
+  </header>
+
+  <main class="container admin-container">
+    <div id="loginBox" class="card admin-card">
+      <h3>Admin Login</h3>
+      <p>Enter your admin password to manage news. (Default: <b>trishan123</b>)</p>
+      <input id="pwd" type="password" placeholder="Password" />
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button id="loginBtn" class="btn">Login</button>
+        <button id="exportBtn" class="btn ghost">Export JSON</button>
+        <button id="importBtn" class="btn ghost">Import JSON</button>
+        <input id="fileInput" type="file" accept="application/json" style="display:none"/>
+      </div>
+      <small class="muted">All data stored in your browser localStorage. Use Export/Import to move data to other device/browser.</small>
+    </div>
+
+    <div id="adminArea" style="display:none;">
+      <div class="card admin-card">
+        <h3>Add / Edit News</h3>
+        <input id="postId" type="hidden" />
+        <input id="title" placeholder="Title" />
+        <input id="category" placeholder="Category (Events / Game Updates)" />
+        <input id="date" placeholder="Date (e.g. Oct 15, 2025)" />
+        <input id="image" placeholder="Image URL (optional)" />
+        <textarea id="excerpt" placeholder="Short excerpt"></textarea>
+        <div style="display:flex;gap:8px;">
+          <button id="saveBtn" class="btn">Save Post</button>
+          <button id="clearBtn" class="btn ghost">Clear</button>
+        </div>
+      </div>
+
+      <div class="card admin-card">
+        <h3>Existing Posts</h3>
+        <div id="postList"></div>
+        <small class="muted">Edit / Delete posts. Order is newest first.</small>
+      </div>
+
+      <div class="card admin-card">
+        <h3>Security</h3>
+        <p>Change admin password (stored locally)</p>
+        <input id="newPwd" placeholder="New password" />
+        <div style="display:flex;gap:8px;">
+          <button id="changePwdBtn" class="btn">Change Password</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+<script>
+  const POSTS_KEY = 'ffu_posts_v1';
+  const PWD_KEY = 'ffu_admin_pwd_v1';
+  const defaultPwd = 'trishan123';
+
+  // helpers
+  function readPosts(){ try { return JSON.parse(localStorage.getItem(POSTS_KEY)) || []; } catch(e){ return []; } }
+  function writePosts(a){ localStorage.setItem(POSTS_KEY, JSON.stringify(a)); }
+  function uid(){ return 'id_' + Math.random().toString(36).slice(2,9); }
+
+  function getStorePwd(){
+    return localStorage.getItem(PWD_KEY) || btoa(defaultPwd);
+  }
+  function setStorePwd(raw){
+    localStorage.setItem(PWD_KEY, btoa(raw));
+  }
+  // on first run ensure password set (encoded)
+  if(!localStorage.getItem(PWD_KEY)) setStorePwd(defaultPwd);
+
+  // login flow
+  document.getElementById('loginBtn').addEventListener('click', ()=>{
+    const v = document.getElementById('pwd').value || '';
+    const stored = getStorePwd();
+    if(btoa(v) === stored){
+      showAdmin();
+    } else {
+      alert('Wrong password');
+    }
+  });
+
+  function showAdmin(){
+    document.getElementById('loginBox').style.display='none';
+    document.getElementById('adminArea').style.display='block';
+    renderPostList();
+  }
+
+  // Save post
+  document.getElementById('saveBtn').addEventListener('click', ()=>{
+    const id = document.getElementById('postId').value || uid();
+    const title = document.getElementById('title').value.trim();
+    if(!title){ alert('Title required'); return; }
+    const newPost = {
+      id,
+      title,
+      category: document.getElementById('category').value || 'News',
+      date: document.getElementById('date').value || (new Date()).toLocaleDateString(),
+      image: document.getElementById('image').value || '',
+      excerpt: document.getElementById('excerpt').value || ''
+    };
+    const posts = readPosts().filter(p=>p.id !== id);
+    posts.unshift(newPost);
+    writePosts(posts);
+    clearForm();
+    renderPostList();
+    alert('Saved');
+  });
+
+  function clearForm(){
+    document.getElementById('postId').value='';
+    document.getElementById('title').value='';
+    document.getElementById('category').value='';
+    document.getElementById('date').value='';
+    document.getElementById('image').value='';
+    document.getElementById('excerpt').value='';
+  }
+  document.getElementById('clearBtn').addEventListener('click', clearForm);
+
+  function renderPostList(){
+    const wrap = document.getElementById('postList');
+    const posts = readPosts();
+    if(posts.length === 0){ wrap.innerHTML = '<p class="muted">No posts yet — add one above.</p>'; return; }
+    wrap.innerHTML = '';
+    posts.forEach(p=>{
+      const el = document.createElement('div');
+      el.className='post-row';
+      el.innerHTML = `<div>
+          <strong>${escapeHtml(p.title)}</strong><div class="muted">${escapeHtml(p.category)} • ${escapeHtml(p.date)}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn small" data-id="${p.id}" data-action="edit">Edit</button>
+          <button class="btn small ghost" data-id="${p.id}" data-action="del">Delete</button>
+        </div>`;
+      wrap.appendChild(el);
+    });
+    wrap.querySelectorAll('button').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const id = e.currentTarget.dataset.id;
+        const action = e.currentTarget.dataset.action;
+        if(action === 'edit'){
+          const p = readPosts().find(x=>x.id===id);
+          if(!p) return;
+          document.getElementById('postId').value = p.id;
+          document.getElementById('title').value = p.title;
+          document.getElementById('category').value = p.category;
+          document.getElementById('date').value = p.date;
+          document.getElementById('image').value = p.image;
+          document.getElementById('excerpt').value = p.excerpt;
+          window.scrollTo({top:0,behavior:'smooth'});
+        } else if(action === 'del'){
+          if(!confirm('Delete this post?')) return;
+          const arr = readPosts().filter(x=>x.id!==id);
+          writePosts(arr);
+          renderPostList();
+        }
+      });
+    });
+  }
+
+  // change password
+  document.getElementById('changePwdBtn').addEventListener('click', ()=>{
+    const np = document.getElementById('newPwd').value.trim();
+    if(!np){ alert('Enter new password'); return; }
+    setStorePwd(np);
+    document.getElementById('newPwd').value='';
+    alert('Password saved locally.');
+  });
+
+  // Export / Import
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    const data = JSON.stringify(readPosts(), null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ffu_posts_export.json'; a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('fileInput').click());
+  document.getElementById('fileInput').addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if(!Array.isArray(parsed)){ alert('Invalid JSON'); return; }
+        writePosts(parsed);
+        alert('Imported posts. Refreshing list.');
+        renderPostList();
+      } catch (err){ alert('Invalid file'); }
+    };
+    reader.readAsText(f);
+  });
+
+  // small helper
+  function escapeHtml(s){
+    if(!s) return '';
+    return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+  }
+
+  // If user had logged in via stored flag (optional) — not implemented for simplicity
+</script>
+</body>
+</html>
