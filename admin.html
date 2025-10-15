@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Admin — Free Fire Updates By Trishan~</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* small admin-specific tweaks (keeps using your styles.css) */
+    .admin-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .flex-row{display:flex;gap:8px;align-items:center}
+    .danger{background:#ff5252;color:#111}
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -20,21 +26,32 @@
 
   <main class="container admin-container">
     <div id="loginBox" class="card admin-card">
-      <h3>Admin Login</h3>
-      <p>Enter your admin password to manage news. (Default: <b>trishan123</b>)</p>
+      <div class="admin-top">
+        <h3>Admin Login</h3>
+        <div class="flex-row">
+          <button id="exportBtn" class="btn ghost">Export JSON</button>
+          <button id="importBtn" class="btn ghost">Import JSON</button>
+          <input id="fileInput" type="file" accept="application/json" style="display:none"/>
+        </div>
+      </div>
+      <p>Enter your admin password to manage news.</p>
       <input id="pwd" type="password" placeholder="Password" />
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button id="loginBtn" class="btn">Login</button>
-        <button id="exportBtn" class="btn ghost">Export JSON</button>
-        <button id="importBtn" class="btn ghost">Import JSON</button>
-        <input id="fileInput" type="file" accept="application/json" style="display:none"/>
+        <button id="resetLocal" class="btn ghost">Reset Local (if locked)</button>
       </div>
-      <small class="muted">All data stored in your browser localStorage. Use Export/Import to move data to other device/browser.</small>
+      <small class="muted">Default password: <b>trishan123</b> (change after login).</small>
     </div>
 
     <div id="adminArea" style="display:none;">
       <div class="card admin-card">
-        <h3>Add / Edit News</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3>Add / Edit News</h3>
+          <div>
+            <button id="logoutBtn" class="btn ghost">Logout</button>
+          </div>
+        </div>
+
         <input id="postId" type="hidden" />
         <input id="title" placeholder="Title" />
         <input id="category" placeholder="Category (Events / Game Updates)" />
@@ -54,166 +71,216 @@
       </div>
 
       <div class="card admin-card">
-        <h3>Security</h3>
-        <p>Change admin password (stored locally)</p>
-        <input id="newPwd" placeholder="New password" />
-        <div style="display:flex;gap:8px;">
+        <h3>Security — Change Password</h3>
+        <input id="curPwd" type="password" placeholder="Current password" />
+        <input id="newPwd" type="password" placeholder="New password" />
+        <input id="confirmNewPwd" type="password" placeholder="Confirm new password" />
+        <div style="display:flex;gap:8px;margin-top:8px;">
           <button id="changePwdBtn" class="btn">Change Password</button>
+          <button id="showPwdHint" class="btn ghost">Show Stored (debug)</button>
         </div>
+        <small class="muted">Passwords are stored as a SHA-256 hash in your browser (not plain text).</small>
       </div>
     </div>
   </main>
 
 <script>
-  const POSTS_KEY = 'ffu_posts_v1';
-  const PWD_KEY = 'ffu_admin_pwd_v1';
-  const defaultPwd = 'trishan123';
+/*
+ Client-side admin with hashed password (SHA-256).
+ Keys:
+  - POSTS_KEY = 'ffu_posts_v1'
+  - PWD_KEY   = 'ffu_admin_pwd_v1' (stores base64 of hash)
+ Default password: 'trishan123' (hash initialized on first load)
+*/
 
-  // helpers
-  function readPosts(){ try { return JSON.parse(localStorage.getItem(POSTS_KEY)) || []; } catch(e){ return []; } }
-  function writePosts(a){ localStorage.setItem(POSTS_KEY, JSON.stringify(a)); }
-  function uid(){ return 'id_' + Math.random().toString(36).slice(2,9); }
+const POSTS_KEY = 'ffu_posts_v1';
+const PWD_KEY = 'ffu_admin_pwd_v1';
+const DEFAULT_PLAIN = 'trishan123';
 
-  function getStorePwd(){
-    return localStorage.getItem(PWD_KEY) || btoa(defaultPwd);
+// helper - sha256 then base64
+async function sha256Base64(text){
+  const enc = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  const asBytes = new Uint8Array(hash);
+  // convert to base64
+  let binary = '';
+  for (let i=0;i<asBytes.byteLength;i++) binary += String.fromCharCode(asBytes[i]);
+  return btoa(binary);
+}
+
+async function ensurePwd(){
+  if(!localStorage.getItem(PWD_KEY)){
+    const hashed = await sha256Base64(DEFAULT_PLAIN);
+    localStorage.setItem(PWD_KEY, hashed);
   }
-  function setStorePwd(raw){
-    localStorage.setItem(PWD_KEY, btoa(raw));
-  }
-  // on first run ensure password set (encoded)
-  if(!localStorage.getItem(PWD_KEY)) setStorePwd(defaultPwd);
+}
+ensurePwd();
 
-  // login flow
-  document.getElementById('loginBtn').addEventListener('click', ()=>{
-    const v = document.getElementById('pwd').value || '';
-    const stored = getStorePwd();
-    if(btoa(v) === stored){
-      showAdmin();
-    } else {
-      alert('Wrong password');
-    }
+// basic posts helpers
+function readPosts(){ try { return JSON.parse(localStorage.getItem(POSTS_KEY)) || []; } catch(e){ return []; } }
+function writePosts(a){ localStorage.setItem(POSTS_KEY, JSON.stringify(a)); }
+function uid(){ return 'id_' + Math.random().toString(36).slice(2,9); }
+
+// login button
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const v = document.getElementById('pwd').value || '';
+  const stored = localStorage.getItem(PWD_KEY) || '';
+  const hashed = await sha256Base64(v);
+  if(hashed === stored){
+    showAdmin();
+  } else {
+    alert('Wrong password');
+  }
+});
+
+// show admin area
+function showAdmin(){
+  document.getElementById('loginBox').style.display='none';
+  document.getElementById('adminArea').style.display='block';
+  renderPostList();
+}
+
+// save post
+document.getElementById('saveBtn').addEventListener('click', ()=>{
+  const id = document.getElementById('postId').value || uid();
+  const title = document.getElementById('title').value.trim();
+  if(!title){ alert('Title required'); return; }
+  const newPost = {
+    id,
+    title,
+    category: document.getElementById('category').value || 'News',
+    date: document.getElementById('date').value || (new Date()).toLocaleDateString(),
+    image: document.getElementById('image').value || '',
+    excerpt: document.getElementById('excerpt').value || ''
+  };
+  const posts = readPosts().filter(p=>p.id !== id);
+  posts.unshift(newPost);
+  writePosts(posts);
+  clearForm();
+  renderPostList();
+  alert('Saved');
+});
+
+// clear
+document.getElementById('clearBtn').addEventListener('click', clearForm);
+function clearForm(){
+  document.getElementById('postId').value='';
+  document.getElementById('title').value='';
+  document.getElementById('category').value='';
+  document.getElementById('date').value='';
+  document.getElementById('image').value='';
+  document.getElementById('excerpt').value='';
+}
+
+// render list
+function renderPostList(){
+  const wrap = document.getElementById('postList');
+  const posts = readPosts();
+  if(posts.length === 0){ wrap.innerHTML = '<p class="muted">No posts yet — add one above.</p>'; return; }
+  wrap.innerHTML = '';
+  posts.forEach(p=>{
+    const el = document.createElement('div');
+    el.className='post-row';
+    el.innerHTML = `<div>
+        <strong>${escapeHtml(p.title)}</strong><div class="muted">${escapeHtml(p.category)} • ${escapeHtml(p.date)}</div>
+      </div>
+      <div class="row-actions">
+        <button class="btn small" data-id="${p.id}" data-action="edit">Edit</button>
+        <button class="btn small ghost danger" data-id="${p.id}" data-action="del">Delete</button>
+      </div>`;
+    wrap.appendChild(el);
   });
-
-  function showAdmin(){
-    document.getElementById('loginBox').style.display='none';
-    document.getElementById('adminArea').style.display='block';
-    renderPostList();
-  }
-
-  // Save post
-  document.getElementById('saveBtn').addEventListener('click', ()=>{
-    const id = document.getElementById('postId').value || uid();
-    const title = document.getElementById('title').value.trim();
-    if(!title){ alert('Title required'); return; }
-    const newPost = {
-      id,
-      title,
-      category: document.getElementById('category').value || 'News',
-      date: document.getElementById('date').value || (new Date()).toLocaleDateString(),
-      image: document.getElementById('image').value || '',
-      excerpt: document.getElementById('excerpt').value || ''
-    };
-    const posts = readPosts().filter(p=>p.id !== id);
-    posts.unshift(newPost);
-    writePosts(posts);
-    clearForm();
-    renderPostList();
-    alert('Saved');
-  });
-
-  function clearForm(){
-    document.getElementById('postId').value='';
-    document.getElementById('title').value='';
-    document.getElementById('category').value='';
-    document.getElementById('date').value='';
-    document.getElementById('image').value='';
-    document.getElementById('excerpt').value='';
-  }
-  document.getElementById('clearBtn').addEventListener('click', clearForm);
-
-  function renderPostList(){
-    const wrap = document.getElementById('postList');
-    const posts = readPosts();
-    if(posts.length === 0){ wrap.innerHTML = '<p class="muted">No posts yet — add one above.</p>'; return; }
-    wrap.innerHTML = '';
-    posts.forEach(p=>{
-      const el = document.createElement('div');
-      el.className='post-row';
-      el.innerHTML = `<div>
-          <strong>${escapeHtml(p.title)}</strong><div class="muted">${escapeHtml(p.category)} • ${escapeHtml(p.date)}</div>
-        </div>
-        <div class="row-actions">
-          <button class="btn small" data-id="${p.id}" data-action="edit">Edit</button>
-          <button class="btn small ghost" data-id="${p.id}" data-action="del">Delete</button>
-        </div>`;
-      wrap.appendChild(el);
-    });
-    wrap.querySelectorAll('button').forEach(btn=>{
-      btn.addEventListener('click', (e)=>{
-        const id = e.currentTarget.dataset.id;
-        const action = e.currentTarget.dataset.action;
-        if(action === 'edit'){
-          const p = readPosts().find(x=>x.id===id);
-          if(!p) return;
-          document.getElementById('postId').value = p.id;
-          document.getElementById('title').value = p.title;
-          document.getElementById('category').value = p.category;
-          document.getElementById('date').value = p.date;
-          document.getElementById('image').value = p.image;
-          document.getElementById('excerpt').value = p.excerpt;
-          window.scrollTo({top:0,behavior:'smooth'});
-        } else if(action === 'del'){
-          if(!confirm('Delete this post?')) return;
-          const arr = readPosts().filter(x=>x.id!==id);
-          writePosts(arr);
-          renderPostList();
-        }
-      });
-    });
-  }
-
-  // change password
-  document.getElementById('changePwdBtn').addEventListener('click', ()=>{
-    const np = document.getElementById('newPwd').value.trim();
-    if(!np){ alert('Enter new password'); return; }
-    setStorePwd(np);
-    document.getElementById('newPwd').value='';
-    alert('Password saved locally.');
-  });
-
-  // Export / Import
-  document.getElementById('exportBtn').addEventListener('click', ()=>{
-    const data = JSON.stringify(readPosts(), null, 2);
-    const blob = new Blob([data], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'ffu_posts_export.json'; a.click();
-    URL.revokeObjectURL(url);
-  });
-  document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('fileInput').click());
-  document.getElementById('fileInput').addEventListener('change', (e)=>{
-    const f = e.target.files[0];
-    if(!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result);
-        if(!Array.isArray(parsed)){ alert('Invalid JSON'); return; }
-        writePosts(parsed);
-        alert('Imported posts. Refreshing list.');
+  wrap.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const id = e.currentTarget.dataset.id;
+      const action = e.currentTarget.dataset.action;
+      if(action === 'edit'){
+        const p = readPosts().find(x=>x.id===id);
+        if(!p) return;
+        document.getElementById('postId').value = p.id;
+        document.getElementById('title').value = p.title;
+        document.getElementById('category').value = p.category;
+        document.getElementById('date').value = p.date;
+        document.getElementById('image').value = p.image;
+        document.getElementById('excerpt').value = p.excerpt;
+        window.scrollTo({top:0,behavior:'smooth'});
+      } else if(action === 'del'){
+        if(!confirm('Delete this post?')) return;
+        const arr = readPosts().filter(x=>x.id!==id);
+        writePosts(arr);
         renderPostList();
-      } catch (err){ alert('Invalid file'); }
-    };
-    reader.readAsText(f);
+      }
+    });
   });
+}
 
-  // small helper
-  function escapeHtml(s){
-    if(!s) return '';
-    return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-  }
+// change password
+document.getElementById('changePwdBtn').addEventListener('click', async ()=>{
+  const cur = document.getElementById('curPwd').value || '';
+  const np = document.getElementById('newPwd').value || '';
+  const cp = document.getElementById('confirmNewPwd').value || '';
+  if(!cur || !np || !cp){ alert('Fill all fields'); return; }
+  if(np !== cp){ alert('New passwords do not match'); return; }
+  const stored = localStorage.getItem(PWD_KEY) || '';
+  if(await sha256Base64(cur) !== stored){ alert('Current password incorrect'); return; }
+  const newHash = await sha256Base64(np);
+  localStorage.setItem(PWD_KEY, newHash);
+  document.getElementById('curPwd').value=''; document.getElementById('newPwd').value=''; document.getElementById('confirmNewPwd').value='';
+  alert('Password changed locally.');
+});
 
-  // If user had logged in via stored flag (optional) — not implemented for simplicity
+// logout
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  document.getElementById('adminArea').style.display='none';
+  document.getElementById('loginBox').style.display='block';
+  document.getElementById('pwd').value='';
+});
+
+// export/import
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const data = JSON.stringify(readPosts(), null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ffu_posts_export.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if(!Array.isArray(parsed)){ alert('Invalid JSON'); return; }
+      writePosts(parsed);
+      alert('Imported posts.');
+      renderPostList();
+    } catch (err){ alert('Invalid file'); }
+  };
+  reader.readAsText(f);
+});
+
+// reset local (if locked out) - removes pwd and posts keys (warn)
+document.getElementById('resetLocal').addEventListener('click', ()=>{
+  if(!confirm('This will REMOVE saved admin password and posts from this browser. Continue?')) return;
+  localStorage.removeItem(PWD_KEY);
+  localStorage.removeItem(POSTS_KEY);
+  alert('Local keys removed. Reload page to reinitialize default password.');
+  location.reload();
+});
+
+// debug: show stored hash (not recommended for regular use)
+document.getElementById('showPwdHint').addEventListener('click', ()=>{
+  alert('Stored hash (base64):\\n' + (localStorage.getItem(PWD_KEY) || 'none'));
+});
+
+// small helper
+function escapeHtml(s){
+  if(!s) return '';
+  return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
 </script>
 </body>
 </html>
